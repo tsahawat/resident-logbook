@@ -11,31 +11,46 @@
     .card{background:var(--card);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.25);padding:20px}
     h1{margin:0 0 12px;font-size:22px}
     label{color:var(--muted);margin-right:10px}
-   table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 12px;
-  table-layout: auto;        /* let browser distribute widths */
-}
+  /* Table layout */
+  table{
+    width:100%;
+    border-collapse:collapse;
+    margin-top:12px;
+    table-layout:auto;            /* let browser distribute widths */
+  }
+  th,td{
+    border:1px solid #334155;
+    padding:10px 12px;            /* more breathing room */
+  }
 
-th, td {
-  border: 1px solid #334155;
-  padding: 8px 12px;         /* add more horizontal padding */
-  text-align: right;
-}
+  /* Headers: wrap and center */
+  thead th{
+    white-space:normal;           /* allow wrapping for long labels */
+    text-align:center;
+    vertical-align:middle;
+    line-height:1.25;
+  }
 
-th:first-child,
-td:first-child {
-  text-align: left;          /* FullName aligned left */
-  white-space: nowrap;       /* prevent wrapping of names */
-}
+  /* Body cells: numbers right-aligned, names left */
+  tbody td{ text-align:right; }
+  th:first-child, td:first-child{
+    text-align:left;
+    white-space:nowrap;           /* keep names on one line */
+  }
 
-th:last-child,
-td:last-child
+  /* Highlight last two summary columns (Total procedures, Grand Total) */
+  th:nth-last-child(-n+2),
+  td:nth-last-child(-n+2){
+    background:#1e293b;
+    font-weight:700;
+  }
 
-tfoot td {
-  font-weight: 700;
-}
+  /* Footer */
+  tfoot td{
+    font-weight:700;
+    text-align:right;
+  }
+  tfoot td:first-child{ text-align:left; }
     input,select,button{padding:8px;border-radius:8px;border:1px solid #334155;background:#0b1220;color:var(--txt)}
     
     /* extra style for download links */
