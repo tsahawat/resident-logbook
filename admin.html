@@ -3,6 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+<!-- PWA -->
+<link rel="manifest" href="/manifest.admin.webmanifest">
+<meta name="theme-color" content="#0f172a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="/icons/surveillance/icon-180.png">  <!-- admin -->
+
+  
   <title>Resident Logbook — Admin</title>
   <style>
     :root { --bg:#0f172a; --card:#111827; --txt:#e5e7eb; --muted:#9ca3af; }
@@ -332,5 +340,12 @@ function downloadText(text, filename){
   a.remove();
 }
 </script>
+<!-- Service worker -->
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/service-worker.js').catch(()=>{});
+}
+</script>
+  
 </body>
 </html>
