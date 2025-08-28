@@ -31,8 +31,12 @@
     .muted{color:var(--muted)}
     .ok{color:#10b981}
     .err{color:#f87171}
-
-    /* mobile polish: ensure tap targets + respect safe areas */
+/* (optional) small tweaks on narrow screens */
+@media (max-width: 900px){
+  thead th{ font-size:14px; }
+  th, td{ padding:8px 10px; }
+}
+/* mobile polish: ensure tap targets + respect safe areas */
 button, input, select { 
   min-height: 44px;      /* Apple/Google recommend at least 44px */
 }
