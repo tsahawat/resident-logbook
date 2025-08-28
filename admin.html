@@ -158,7 +158,7 @@ function render(){
   // ----- Render HTML table (as before) -----
   let html = '<table><thead><tr><th>FullName</th>';
   PROC_ORDER.forEach(p => html += `<th>${escapeHtml(p)}</th>`);
-  html += '<th>Total</th></tr></thead><tbody>';
+  html += '<th>Total procedures</th><th>Grand total</th></tr></thead><tbody>';
 
   const colTotals = PROC_ORDER.map(p => grandTotals.get(p)||0);
 
@@ -167,32 +167,37 @@ function render(){
   names.forEach(name => {
     const row = matrix.get(name);
     let rowTotal = 0;
+    let rowProcTotal = 0;
     const line = [name];
     PROC_ORDER.forEach(p=>{
       const v = row.get(p)||0; rowTotal += v;
+      if (p !== 'Case attending') rowProcTotal += v;
       line.push(v);
     });
-    line.push(rowTotal);
-    pivotRows.push(line);
+
+  // keep both totals in the pivotRows (for Download Pivot CSV)
+  line.push(rowProcTotal, rowTotal);
+  pivotRows.push(line);
 
     html += `<tr><td>${escapeHtml(name)}</td>`;
     PROC_ORDER.forEach(p=> html += `<td>${row.get(p)||0}</td>`);
-    html += `<td>${rowTotal}</td></tr>`;
+    html += `<td>${rowProcTotal}</td><td>${rowTotal}</td></tr>`;
   });
 
   const grandTotal = colTotals.reduce((a,b)=>a+b,0);
+  const procTotal  = PROC_ORDER.reduce((sum,p,i) => p === 'Case attending' ? sum : sum + colTotals[i], 0);
   html += '</tbody><tfoot><tr><td><b>Totals</b></td>';
   colTotals.forEach(v => html += `<td><b>${v}</b></td>`);
-  html += `<td><b>${grandTotal}</b></td></tr></tfoot></table>`;
+  html += `<td><b>${procTotal}</b></td><td><b>${grandTotal}</b></td></tr></tfoot></table>`;
 
   tableWrap.innerHTML = html;
   statsEl.textContent = `${filtered.length} rows | ${names.length} residents | ${totalCount} total counted procedures`;
 
   // ----- Keep pivot for download -----
   lastPivot = [
-    ['FullName', ...PROC_ORDER, 'Total'],
+    ['FullName', ...PROC_ORDER, 'Total procedures', 'Grand Total'],
     ...pivotRows,
-    ['Totals', ...colTotals, grandTotal]
+    ['Totals', ...colTotals, procTotal, grandTotal]
   ];
 }
 
