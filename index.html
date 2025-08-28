@@ -147,12 +147,20 @@
 
     setBusy(true);
     try {
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, surname, residentYear, procedures, clientId, secret: API_SECRET })
-      });
-      const data = await res.json();
+const payload = new URLSearchParams({
+  name,
+  surname,
+  residentYear,
+  procedures: JSON.stringify(procedures), // stringify the array
+  clientId,
+  secret: API_SECRET
+});
+
+const res = await fetch(API_URL, {
+  method: 'POST',
+  body: payload
+});
+const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || ('HTTP '+res.status));
 
       document.querySelectorAll('#procs input[type=number]').forEach(inp => inp.value = '0');
