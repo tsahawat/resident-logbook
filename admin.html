@@ -97,6 +97,17 @@ th:nth-last-child(-n+2), td:nth-last-child(-n+2){
   thead th{ font-size:14px; }
   th, td{ padding:8px 10px; }
 }
+/* mobile polish: ensure tap targets + respect safe areas */
+button, input, select { 
+  min-height: 44px;      /* Apple/Google recommend at least 44px */
+}
+
+@supports (padding: max(0px)) {
+  body { 
+    padding-bottom: max(env(safe-area-inset-bottom), 0px);
+  }
+}
+    
   </style>
 </head>
 <body>
