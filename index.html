@@ -185,5 +185,13 @@ const data = await res.json();
   function showOk(msg){ hintEl.textContent=msg; hintEl.className='ok'; }
   function showErr(msg){ hintEl.textContent=msg; hintEl.className='err'; }
 </script>
+
+<!-- PWA -->
+  <script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/service-worker.js').catch(()=>{});
+}
+</script>
+  
 </body>
 </html>
