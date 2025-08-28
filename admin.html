@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Resident Logbook — Admin</title>
+  <style>
+    :root { --bg:#0f172a; --card:#111827; --txt:#e5e7eb; --muted:#9ca3af; }
+    body{margin:0;background:var(--bg);color:var(--txt);font:16px/1.5 system-ui,Segoe UI,Roboto,Helvetica,Arial}
+    .wrap{max-width:1100px;margin:0 auto;padding:24px}
+    .card{background:var(--card);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.25);padding:20px}
+    h1{margin:0 0 12px;font-size:22px}
+    label{color:var(--muted);margin-right:10px}
+    table{width:100%;border-collapse:collapse;margin-top:12px}
+    th,td{border:1px solid #334155;padding:8px;text-align:right}
+    th:first-child, td:first-child { text-align:left }
+    tfoot td{font-weight:700}
+    input,select,button{padding:8px;border-radius:8px;border:1px solid #334155;background:#0b1220;color:var(--txt)}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Resident Logbook — Admin</h1>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <label>Year
+          <select id="year">
+            <option value="">All</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+          </select>
+        </label>
+        <label>Search name <input id="q" placeholder="type to filter" /></label>
+        <button id="refresh">Refresh</button>
+        <a id="downloadCsv" href="#" download="resident-logbook.csv">Download CSV</a>
+      </div>
+      <div id="stats" style="margin-top:10px;color:var(--muted)"></div>
+      <div id="tableWrap"></div>
+    </div>
+  </div>
+
+<script>
+  // === CONFIG ===
+  const CSV_URL = 'https://script.google.com/macros/s/AKfycbz1mgE0WGLqe6qHLOXuhHJdamkZ4Pa_bm-wBLYFDyuFeLXBGDq_fyq3aePU8ffjTmXD/exec?mode=csv';
+  const PROC_ORDER = [
+    'Case attending',
+    'Endotracheal tube insertion',
+    'Laryngeal mask airway insertion',
+    'Arterial line insertion',
+    'Central venous pressure insertion',
+    'Brachial plexus block',
+    'Lower limb blocks',
+    'Spinal block',
+    'Epidural block',
+    'Painless labour'
+  ];
+
+  const yearSel = document.getElementById('year');
+  const qEl = document.getElementById('q');
+  const tableWrap = document.getElementById('tableWrap');
+  const statsEl = document.getElementById('stats');
+  document.getElementById('refresh').addEventListener('click', load);
+  yearSel.addEventListener('change', render);
+  qEl.addEventListener('input', render);
+
+  document.getElementById('downloadCsv').href = CSV_URL;
+
+  let rows = [];
+  load();
+
+  async function load(){
+    tableWrap.innerHTML = 'Loading…';
+    try{
+      const res = await fetch(CSV_URL, { cache: 'no-store' });
+      const text = await res.text();
+      rows = parseCsv(text);
+      render();
+    }catch(err){ tableWrap.innerHTML = 'Error loading CSV: '+String(err); }
+  }
+
+  function render(){
+    if (!rows.length){ tableWrap.innerHTML = 'No data'; return; }
+
+    const [hdr,...data] = rows;
+    const idx = Object.fromEntries(hdr.map((h,i)=>[h,i]));
+
+    const yearFilter = yearSel.value.trim();
+    const q = qEl.value.trim().toLowerCase();
+
+    const filtered = data.filter(r => {
+      const yearOk = !yearFilter || r[idx.ResidentYear] === yearFilter;
+      const nameOk = !q || (r[idx.FullName]||'').toLowerCase().includes(q);
+      return yearOk && nameOk;
+    });
+
+    // Pivot by FullName × Procedure
+    const matrix = new Map();
+    const grandTotals = new Map();
+    let totalCount = 0;
+    filtered.forEach(r => {
+      const name = r[idx.FullName]||'';
+      const proc = r[idx.Procedure]||'';
+      const cnt = Number(r[idx.Count]||'0')||0;
+      totalCount += cnt;
+      if (!matrix.has(name)) matrix.set(name, new Map());
+      const row = matrix.get(name);
+      row.set(proc, (row.get(proc)||0) + cnt);
+      grandTotals.set(proc, (grandTotals.get(proc)||0) + cnt);
+    });
+
+    const names = [...matrix.keys()].sort((a,b)=>a.localeCompare(b));
+
+    let html = '<table><thead><tr><th>FullName</th>';
+    PROC_ORDER.forEach(p => html += `<th>${escapeHtml(p)}</th>`);
+    html += '<th>Total</th></tr></thead><tbody>';
+
+    let colTotals = PROC_ORDER.map(p => grandTotals.get(p)||0);
+
+    names.forEach(name => {
+      const row = matrix.get(name);
+      let rowTotal = 0;
+      html += `<tr><td>${escapeHtml(name)}</td>`;
+      PROC_ORDER.forEach(p=>{
+        const v = row.get(p)||0; rowTotal += v;
+        html += `<td>${v}</td>`;
+      });
+      html += `<td>${rowTotal}</td></tr>`;
+    });
+
+    const grandTotal = colTotals.reduce((a,b)=>a+b,0);
+    html += '</tbody><tfoot><tr><td><b>Totals</b></td>';
+    colTotals.forEach(v => html += `<td><b>${v}</b></td>`);
+    html += `<td><b>${grandTotal}</b></td></tr></tfoot></table>`;
+
+    tableWrap.innerHTML = html;
+    statsEl.textContent = `${filtered.length} rows | ${names.length} residents | ${totalCount} total counted procedures`;
+  }
+
+  // Simple CSV parser
+  function parseCsv(text){
+    const rows = [];
+    let i = 0, field = '', row = [], inQuotes = false;
+    while (i < text.length){
+      const ch = text[i++];
+      if (inQuotes){
+        if (ch === '"'){
+          if (text[i] === '"'){ field += '"'; i++; }
+          else { inQuotes = false; }
+        } else field += ch;
+      } else {
+        if (ch === '"') inQuotes = true;
+        else if (ch === ','){ row.push(field); field=''; }
+        else if (ch === '\n'){ row.push(field); rows.push(row); row=[]; field=''; }
+        else field += ch;
+      }
+    }
+    if (field.length || row.length) { row.push(field); rows.push(row); }
+    return rows;
+  }
+
+  function escapeHtml(s){ 
+    return String(s).replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); 
+  }
+</script>
+</body>
+</html>
