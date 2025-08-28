@@ -78,7 +78,7 @@ document.getElementById('downloadRaw').addEventListener('click', (e) => {
     alert('No CSV loaded yet. Click Refresh first.'); 
     return; 
   }
-  downloadText(lastCsv, 'resident-logbook-raw_${ts()}.csv');
+  downloadText(lastCsv, `resident-logbook-raw_${ts()}.csv`);
 });
 
 document.getElementById('downloadFiltered').addEventListener('click', (e) => {
@@ -88,7 +88,7 @@ document.getElementById('downloadFiltered').addEventListener('click', (e) => {
     return; 
   }
   const filteredCsv = toCsv(lastFiltered);
-  downloadText(filteredCsv, 'resident-logbook-filtered_${ts()}.csv');
+  downloadText(filteredCsv, `resident-logbook-filtered_${ts()}.csv`);
 });
   
   let rows = []; // parsed CSV
