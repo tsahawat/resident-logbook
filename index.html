@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Resident Procedures Logbook</title>
+  <style>
+    :root { --bg:#0f172a; --card:#111827; --txt:#e5e7eb; --muted:#9ca3af; --acc:#22d3ee; }
+    html,body{height:100%}
+    body{margin:0;background:var(--bg);color:var(--txt);font:16px/1.5 system-ui,Segoe UI,Roboto,Helvetica,Arial}
+    .wrap{max-width:720px;margin:0 auto;padding:24px}
+    .card{background:var(--card);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.25);padding:20px}
+    h1{margin:0 0 12px;font-size:22px}
+    label{display:block;margin:10px 0 6px;color:var(--muted)}
+    input[type=text],select{width:100%;padding:10px;border-radius:10px;border:1px solid #334155;background:#0b1220;color:var(--txt)}
+    .grid{display:grid;gap:10px}
+    .grid-2{grid-template-columns:1fr 1fr}
+    .procs{display:grid;grid-template-columns:1fr;gap:8px;margin-top:8px}
+    .proc{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid #334155;border-radius:10px;background:#0b1220}
+    .row{display:flex;gap:10px;align-items:center;justify-content:space-between}
+    button{padding:12px 16px;border:0;border-radius:12px;background:var(--acc);color:#05212a;font-weight:700;cursor:pointer}
+    .muted{color:var(--muted)}
+    .ok{color:#10b981}
+    .err{color:#f87171}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Resident Procedures Logbook</h1>
+      <p class="muted" id="status">
+        Record immediately after performing a procedure. 
+        Your name & year are remembered on this device.
+      </p>
+      <div class="grid grid-2">
+        <div>
+          <label for="name">Name</label>
+          <input id="name" type="text" placeholder="Jane" required />
+        </div>
+        <div>
+          <label for="surname">Surname</label>
+          <input id="surname" type="text" placeholder="Doe" required />
+        </div>
+      </div>
+      <div style="margin-top:8px">
+        <label for="year">Resident year</label>
+        <select id="year">
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+        </select>
+      </div>
+
+      <label style="margin-top:14px">Counts for what you did</label>
+      <div class="procs" id="procs"></div>
+
+      <div class="row" style="margin-top:16px">
+        <button id="submit">Submit</button>
+        <span class="muted" id="hint"></span>
+      </div>
+    </div>
+
+    <p class="muted" style="margin-top:14px">
+      Professors: open the Google Sheet to view counts or download Excel/CSV. 
+      If enabled, CSV endpoint is <code>?mode=csv</code>.
+    </p>
+  </div>
+
+<script>
+  // ==== CONFIG ====
+  const API_URL = 'https://script.google.com/macros/s/AKfycbwRdgjl_0951gfDOhaDdzoT8OX9tgjZfOJUBcHWKe8EoKrxNRemaTg8X7o8zV087los/exec';
+  const API_SECRET = 'AnesRama-2568'; // optional
+
+  const PROCEDURES = [
+    'Case attending',
+    'Endotracheal tube insertion',
+    'Laryngeal mask airway insertion',
+    'Arterial line insertion',
+    'Central venous pressure insertion',
+    'Brachial plexus block',
+    'Lower limb blocks',
+    'Spinal block',
+    'Epidural block',
+    'Painless labour'
+  ];
+
+  // Render procedures as number steppers
+  const procsEl = document.getElementById('procs');
+  PROCEDURES.forEach((p,i)=>{
+    const id = 'p_' + i;
+    const div = document.createElement('div');
+    div.className = 'proc';
+    div.innerHTML = `
+      <span style="flex:1">${p}</span>
+      <button type="button" data-act="dec" style="min-width:36px">−</button>
+      <input type="number" id="${id}" data-proc="${p}" value="0" min="0" step="1" style="width:64px;text-align:center" />
+      <button type="button" data-act="inc" style="min-width:36px">+</button>
+    `;
+    procsEl.appendChild(div);
+
+    div.querySelector('span').addEventListener('click',()=>{
+      const inp = div.querySelector('input');
+      inp.value = String((+inp.value||0)+1);
+    });
+    div.querySelector('[data-act=inc]').addEventListener('click',()=>{
+      const inp = div.querySelector('input');
+      inp.value = String((+inp.value||0)+1);
+    });
+    div.querySelector('[data-act=dec]').addEventListener('click',()=>{
+      const inp = div.querySelector('input');
+      const v = (+inp.value||0)-1; inp.value = String(v<0?0:v);
+    });
+  });
+
+  const nameEl = document.getElementById('name');
+  const surnameEl = document.getElementById('surname');
+  const yearEl = document.getElementById('year');
+  const hintEl = document.getElementById('hint');
+
+  // Restore saved profile
+  const saved = JSON.parse(localStorage.getItem('resident_profile')||'{}');
+  if (saved.name) nameEl.value = saved.name;
+  if (saved.surname) surnameEl.value = saved.surname;
+  if (saved.year) yearEl.value = saved.year;
+
+  // Generate clientId if missing
+  let clientId = localStorage.getItem('resident_client_id');
+  if (!clientId) {
+    clientId = crypto.getRandomValues(new Uint32Array(4)).join('-');
+    localStorage.setItem('resident_client_id', clientId);
+  }
+
+  document.getElementById('submit').addEventListener('click', submitForm);
+
+  async function submitForm(){
+    const name = nameEl.value.trim();
+    const surname = surnameEl.value.trim();
+    const residentYear = yearEl.value;
+    localStorage.setItem('resident_profile', JSON.stringify({ name, surname, year: residentYear }));
+
+    if (!name || !surname) return showErr('Please fill in name and surname.');
+
+    const procedures = [...document.querySelectorAll('#procs input[type=number]')]
+      .map(inp => ({ name: inp.dataset.proc, count: Math.max(0, parseInt(inp.value||'0',10)) }))
+      .filter(x => x.count > 0);
+
+    if (procedures.length === 0) return showErr('Enter at least one count.');
+
+    setBusy(true);
+    try {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, surname, residentYear, procedures, clientId, secret: API_SECRET })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || ('HTTP '+res.status));
+
+      document.querySelectorAll('#procs input[type=number]').forEach(inp => inp.value = '0');
+      showOk(`Saved ${data.inserted} row(s).`);
+    } catch(err){
+      showErr(String(err.message||err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function setBusy(b){ const btn=document.getElementById('submit'); btn.disabled=b; hintEl.textContent = b? 'Submitting…':''; }
+  function showOk(msg){ hintEl.textContent=msg; hintEl.className='ok'; }
+  function showErr(msg){ hintEl.textContent=msg; hintEl.className='err'; }
+</script>
+</body>
+</html>
