@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- PWA basics -->
+  <!-- PWA basics with manifest bump -->
 <link rel="manifest" href="/manifest.index.webmanifest?v=2">
 <meta name="theme-color" content="#0f172a">
 
@@ -201,7 +201,7 @@ const data = await res.json();
   function showErr(msg){ hintEl.textContent=msg; hintEl.className='err'; }
 </script>
 
-<!-- PWA -->
+<!-- service worker -->
   <script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/service-worker.js').catch(()=>{});
