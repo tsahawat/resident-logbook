@@ -16,6 +16,12 @@
     th:first-child, td:first-child { text-align:left }
     tfoot td{font-weight:700}
     input,select,button{padding:8px;border-radius:8px;border:1px solid #334155;background:#0b1220;color:var(--txt)}
+    
+    /* extra style for download links */
+    a#downloadRaw, a#downloadFiltered { 
+      cursor: pointer; 
+      text-decoration: underline;
+      color: var(--acc, #22d3ee); /* optional highlight */
   </style>
 </head>
 <body>
@@ -71,7 +77,7 @@ document.getElementById('downloadRaw').addEventListener('click', (e) => {
     alert('No CSV loaded yet. Click Refresh first.'); 
     return; 
   }
-  downloadText(lastCsv, 'resident-logbook-raw.csv');
+  downloadText(lastCsv, 'resident-logbook-raw_${ts()}.csv');
 });
 
 document.getElementById('downloadFiltered').addEventListener('click', (e) => {
@@ -81,7 +87,7 @@ document.getElementById('downloadFiltered').addEventListener('click', (e) => {
     return; 
   }
   const filteredCsv = toCsv(lastFiltered);
-  downloadText(filteredCsv, 'resident-logbook-filtered.csv');
+  downloadText(filteredCsv, 'resident-logbook-filtered_${ts()}.csv');
 });
   
   let rows = []; // parsed CSV
@@ -190,6 +196,11 @@ document.getElementById('downloadFiltered').addEventListener('click', (e) => {
   return (s.includes(',') || s.includes('"') || s.includes('\n'))
     ? '"' + s.replace(/"/g,'""') + '"'
     : s;
+}
+  function ts() {
+  const d = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}`;
 }
 function toCsv(arr){           // arr = array-of-arrays
   return arr.map(r => r.map(csvEscape).join(',')).join('\n');
