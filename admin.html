@@ -59,6 +59,36 @@
       text-decoration: underline;
       color: var(--acc, #22d3ee); /* optional highlight */
     }
+    /* keep the card tidy */
+.card{ overflow: hidden; }
+
+/* make the table scroll inside the card instead of overflowing */
+#tableWrap{
+  overflow-x: auto;
+  margin-top: 12px;          /* keeps spacing since table margin may be ignored */
+  border-radius: 12px;       /* matches the card rounding */
+}
+
+/* ensure the table is only as wide as it needs; will scroll if wider than card */
+#tableWrap table{
+  width: max-content;        /* table uses its natural width */
+  min-width: 100%;           /* but never smaller than the card */
+}
+
+/* (optional) make the whole layout a bit narrower so it looks balanced */
+.wrap{ max-width: 1000px; }  /* was 1100px; adjust to taste */
+
+/* (optional) subtle emphasis for the last two summary cols */
+th:nth-last-child(-n+2), td:nth-last-child(-n+2){
+  background:#1e293b;
+  font-weight:700;
+}
+
+/* (optional) small tweaks on narrow screens */
+@media (max-width: 900px){
+  thead th{ font-size:14px; }
+  th, td{ padding:8px 10px; }
+}
   </style>
 </head>
 <body>
