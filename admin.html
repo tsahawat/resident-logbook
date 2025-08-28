@@ -118,6 +118,17 @@ th:nth-last-child(-n+2), td:nth-last-child(-n+2){
 <script>
   // === CONFIG ===
   const CSV_URL = 'https://script.google.com/macros/s/AKfycbz1mgE0WGLqe6qHLOXuhHJdamkZ4Pa_bm-wBLYFDyuFeLXBGDq_fyq3aePU8ffjTmXD/exec?mode=csv';
+  const PROC_LABELS = {
+  'Endotracheal tube insertion': 'ETT',
+  'Laryngeal mask airway insertion': 'LMA',
+  'Arterial line insertion': 'A-line',
+  'Central venous pressure insertion': 'C-line',
+  'Brachial plexus block': 'BPB',
+  'Spinal block': 'Spinal',
+  'Epidural block': 'Epidural',
+  'Painless labour': 'Painless'
+};
+  
   const PROC_ORDER = [
     'Case attending',
     'Endotracheal tube insertion',
@@ -222,9 +233,12 @@ function render(){
   const names = [...matrix.keys()].sort((a,b)=>a.localeCompare(b));
 
   // ----- Render HTML table (as before) -----
-  let html = '<table><thead><tr><th>FullName</th>';
-  PROC_ORDER.forEach(p => html += `<th>${escapeHtml(p)}</th>`);
-  html += '<th>Total procedures</th><th>Grand total</th></tr></thead><tbody>';
+  let html = '<table><thead><tr><th>Resident</th>';
+PROC_ORDER.forEach(p => {
+  const label = PROC_LABELS[p] || p; // use short label if defined
+  html += `<th>${escapeHtml(label)}</th>`;
+});
+html += '<th>Total procedures</th><th>Grand Total</th></tr></thead><tbody>';
 
   const colTotals = PROC_ORDER.map(p => grandTotals.get(p)||0);
 
@@ -260,11 +274,11 @@ function render(){
   statsEl.textContent = `${filtered.length} rows | ${names.length} residents | ${totalCount} total counted procedures`;
 
   // ----- Keep pivot for download -----
-  lastPivot = [
-    ['FullName', ...PROC_ORDER, 'Total procedures', 'Grand Total'],
-    ...pivotRows,
-    ['Totals', ...colTotals, procTotal, grandTotal]
-  ];
+ lastPivot = [
+  ['Resident', ...PROC_ORDER.map(p => PROC_LABELS[p] || p), 'Total procedures', 'Grand Total'],
+  ...pivotRows,
+  ['Totals', ...colTotals, procTotal, grandTotal]
+];
 }
 
   // Simple CSV parser
