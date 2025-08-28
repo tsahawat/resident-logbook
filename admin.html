@@ -40,6 +40,7 @@
         </label>
         <label>Search name <input id="q" placeholder="type to filter" /></label>
         <button id="refresh">Refresh</button>
+        <a href="#" id="downloadPivot">Download Pivot CSV</a>
         <a href="#" id="downloadRaw">Download Raw CSV</a>
         <a href="#" id="downloadFiltered">Download Filtered CSV</a>
       </div>
@@ -72,6 +73,16 @@
   yearSel.addEventListener('change', render);
   qEl.addEventListener('input', render);
 
+document.getElementById('downloadPivot').addEventListener('click', (e) => {
+  e.preventDefault();
+  if (!lastPivot.length) { 
+    alert('No data loaded yet. Click Refresh first.'); 
+    return; 
+  }
+  const pivotCsv = toCsv(lastPivot);
+  downloadText(pivotCsv, `resident-logbook-pivot_${ts()}.csv`);
+});
+  
 document.getElementById('downloadRaw').addEventListener('click', (e) => {
   e.preventDefault();
   if (!lastCsv) { 
@@ -94,6 +105,7 @@ document.getElementById('downloadFiltered').addEventListener('click', (e) => {
   let rows = []; // parsed CSV
   let lastCsv = '';     // raw CSV text from server
   let lastFiltered = []; // filtered rows (array of arrays)
+  let lastPivot = [];     // NEW: pivot table 2D array for download
   load();
 
   async function load(){
@@ -107,65 +119,82 @@ document.getElementById('downloadFiltered').addEventListener('click', (e) => {
     }catch(err){ tableWrap.innerHTML = 'Error loading CSV: '+String(err); }
   }
 
-  function render(){
-    if (!rows.length){ tableWrap.innerHTML = 'No data'; return; }
+function render(){
+  if (!rows.length){ tableWrap.innerHTML = 'No data'; return; }
 
-    const [hdr,...data] = rows;
-    const idx = Object.fromEntries(hdr.map((h,i)=>[h,i]));
+  const [hdr, ...data] = rows;
+  const idx = Object.fromEntries(hdr.map((h,i)=>[h,i]));
 
-    const yearFilter = yearSel.value.trim();
-    const q = qEl.value.trim().toLowerCase();
+  const yearFilter = yearSel.value.trim();
+  const q = qEl.value.trim().toLowerCase();
 
-    const filtered = data.filter(r => {
-      const yearOk = !yearFilter || r[idx.ResidentYear] === yearFilter;
-      const nameOk = !q || (r[idx.FullName]||'').toLowerCase().includes(q);
-      return yearOk && nameOk;
-    });
-  // ⬇️ save the filtered rows (with header) for "Download Filtered CSV"
+  const filtered = data.filter(r => {
+    const yearOk = !yearFilter || r[idx.ResidentYear] === yearFilter;
+    const nameOk = !q || (r[idx.FullName]||'').toLowerCase().includes(q);
+    return yearOk && nameOk;
+  });
+
+  // Keep filtered rows (for “Download Filtered CSV”)
   lastFiltered = [hdr, ...filtered];
 
-    // Pivot by FullName × Procedure
-    const matrix = new Map();
-    const grandTotals = new Map();
-    let totalCount = 0;
-    filtered.forEach(r => {
-      const name = r[idx.FullName]||'';
-      const proc = r[idx.Procedure]||'';
-      const cnt = Number(r[idx.Count]||'0')||0;
-      totalCount += cnt;
-      if (!matrix.has(name)) matrix.set(name, new Map());
-      const row = matrix.get(name);
-      row.set(proc, (row.get(proc)||0) + cnt);
-      grandTotals.set(proc, (grandTotals.get(proc)||0) + cnt);
+  // Build pivot by FullName × Procedure
+  const matrix = new Map();     // name -> Map(proc -> sum)
+  const grandTotals = new Map();
+  let totalCount = 0;
+
+  filtered.forEach(r => {
+    const name = r[idx.FullName]||'';
+    const proc = r[idx.Procedure]||'';
+    const cnt = Number(r[idx.Count]||'0')||0;
+    totalCount += cnt;
+    if (!matrix.has(name)) matrix.set(name, new Map());
+    const row = matrix.get(name);
+    row.set(proc, (row.get(proc)||0) + cnt);
+    grandTotals.set(proc, (grandTotals.get(proc)||0) + cnt);
+  });
+
+  const names = [...matrix.keys()].sort((a,b)=>a.localeCompare(b));
+
+  // ----- Render HTML table (as before) -----
+  let html = '<table><thead><tr><th>FullName</th>';
+  PROC_ORDER.forEach(p => html += `<th>${escapeHtml(p)}</th>`);
+  html += '<th>Total</th></tr></thead><tbody>';
+
+  const colTotals = PROC_ORDER.map(p => grandTotals.get(p)||0);
+
+  const pivotRows = []; // collect rows to export
+
+  names.forEach(name => {
+    const row = matrix.get(name);
+    let rowTotal = 0;
+    const line = [name];
+    PROC_ORDER.forEach(p=>{
+      const v = row.get(p)||0; rowTotal += v;
+      line.push(v);
     });
+    line.push(rowTotal);
+    pivotRows.push(line);
 
-    const names = [...matrix.keys()].sort((a,b)=>a.localeCompare(b));
+    html += `<tr><td>${escapeHtml(name)}</td>`;
+    PROC_ORDER.forEach(p=> html += `<td>${row.get(p)||0}</td>`);
+    html += `<td>${rowTotal}</td></tr>`;
+  });
 
-    let html = '<table><thead><tr><th>FullName</th>';
-    PROC_ORDER.forEach(p => html += `<th>${escapeHtml(p)}</th>`);
-    html += '<th>Total</th></tr></thead><tbody>';
+  const grandTotal = colTotals.reduce((a,b)=>a+b,0);
+  html += '</tbody><tfoot><tr><td><b>Totals</b></td>';
+  colTotals.forEach(v => html += `<td><b>${v}</b></td>`);
+  html += `<td><b>${grandTotal}</b></td></tr></tfoot></table>`;
 
-    let colTotals = PROC_ORDER.map(p => grandTotals.get(p)||0);
+  tableWrap.innerHTML = html;
+  statsEl.textContent = `${filtered.length} rows | ${names.length} residents | ${totalCount} total counted procedures`;
 
-    names.forEach(name => {
-      const row = matrix.get(name);
-      let rowTotal = 0;
-      html += `<tr><td>${escapeHtml(name)}</td>`;
-      PROC_ORDER.forEach(p=>{
-        const v = row.get(p)||0; rowTotal += v;
-        html += `<td>${v}</td>`;
-      });
-      html += `<td>${rowTotal}</td></tr>`;
-    });
-
-    const grandTotal = colTotals.reduce((a,b)=>a+b,0);
-    html += '</tbody><tfoot><tr><td><b>Totals</b></td>';
-    colTotals.forEach(v => html += `<td><b>${v}</b></td>`);
-    html += `<td><b>${grandTotal}</b></td></tr></tfoot></table>`;
-
-    tableWrap.innerHTML = html;
-    statsEl.textContent = `${filtered.length} rows | ${names.length} residents | ${totalCount} total counted procedures`;
-  }
+  // ----- Keep pivot for download -----
+  lastPivot = [
+    ['FullName', ...PROC_ORDER, 'Total'],
+    ...pivotRows,
+    ['Totals', ...colTotals, grandTotal]
+  ];
+}
 
   // Simple CSV parser
   function parseCsv(text){
