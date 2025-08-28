@@ -1,0 +1,20 @@
+{
+  "name": "Resident Logbook",
+  "short_name": "Logbook",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    { "src": "/icons/cases/icon-72.png",  "sizes": "72x72",   "type": "image/png" },
+    { "src": "/icons/cases/icon-96.png",  "sizes": "96x96",   "type": "image/png" },
+    { "src": "/icons/cases/icon-128.png", "sizes": "128x128", "type": "image/png" },
+    { "src": "/icons/cases/icon-144.png", "sizes": "144x144", "type": "image/png" },
+    { "src": "/icons/cases/icon-152.png", "sizes": "152x152", "type": "image/png" },
+    { "src": "/icons/cases/icon-180.png", "sizes": "180x180", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icons/cases/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icons/cases/icon-256.png", "sizes": "256x256", "type": "image/png" },
+    { "src": "/icons/cases/icon-384.png", "sizes": "384x384", "type": "image/png" },
+    { "src": "/icons/cases/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
