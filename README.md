@@ -5,7 +5,7 @@
 1. Open this <a href ="https://tsahawat.github.io/resident-logbook/index.html?v=2">link</a> in your web browser.
 2. If this is your first time using this application, insert your name, surname, and the year of residency training you are currently in.
 3. Add the counts of cases you have attended or procedures you have performed.
-4. Tap "**Submit**". and your record will be saved.
+4. Tap "**Submit**" and your record will be saved.
 
 ## 📲 How to add this application to your iPhone?
 1. Open this <a href ="https://tsahawat.github.io/resident-logbook/index.html?v=2">link</a> in Safari.
