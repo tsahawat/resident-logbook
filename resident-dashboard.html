@@ -51,12 +51,27 @@
       thead th{ font-size:14px }
       th,td{ padding:8px 10px }
     }
+    /* make links look like buttons */
+  a.btn {
+  display:inline-block;
+  padding:10px 16px;
+  border-radius:10px;
+  border:1px solid #334155;
+  background:#0b1220;
+  color:var(--txt);
+  text-decoration:none;
+  min-height:44px;
+  line-height:24px;
+  }
+  a.btn:hover {
+  background:#1e293b;
+}
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="card">
-      <h1>My Year — Progress</h1>
+      <h1>My Progress</h1>
       <div id="myProgress"></div>
 
       <div class="row">
@@ -70,7 +85,7 @@
         </label>
         <span class="muted" id="who"></span>
         <button id="refresh">Refresh</button>
-        <a href="index.html" class="btnlink" id="backToLog">Back to Logbook</a>
+        <a href="index.html" id="backToLog" class="btn">Back to Logbook</a>
         <a href="#" id="downloadYear" class="btnlink">Download Year CSV</a>
         <a href="#" id="downloadMe" class="btnlink">Download My CSV</a>
       </div>
