@@ -20,5 +20,7 @@
 4. Tap "**Install**".
 
 🧑‍🎨 Created by Sahawat Thertchanakun
-You can report any bugs or problems encountered here: [sahawat.the@mahidol.ac.th](mailto:sahawat.the@mahidol.ac.th)
+
+📮You can report any bugs or problems encountered here: 
+[sahawat.the@mahidol.ac.th](mailto:sahawat.the@mahidol.ac.th)
 
