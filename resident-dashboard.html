@@ -50,23 +50,6 @@
       thead th{ font-size:14px }
       th,td{ padding:8px 10px }
     }
-
-    /* unified button style */
-    .btn, button {
-      display:inline-block;
-      padding:10px 16px;
-      border-radius:10px;
-      border:1px solid #334155;
-      background:#0b1220;
-      color:var(--txt);
-      text-decoration:none;
-      min-height:44px;
-      line-height:24px;
-      cursor:pointer;
-    }
-    .btn:hover, button:hover {
-      background:#1e293b;
-    }
   </style>
 </head>
 <body>
@@ -85,8 +68,8 @@
           </select>
         </label>
         <span class="muted" id="who"></span>
-        <button id="refresh" class="btn">Refresh</button>
-        <a href="index.html" id="backToLog" class="btn">Back to Logbook</a>
+        <button id="refresh">Refresh</button>
+        <a href="index.html" id="backToLog" class="btnlink">Back to Logbook</a>
         <a href="#" id="downloadYear" class="btnlink">Download Year CSV</a>
         <a href="#" id="downloadMe" class="btnlink">Download My CSV</a>
       </div>
