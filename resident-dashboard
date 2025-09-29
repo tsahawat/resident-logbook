@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- PWA (separate manifest so it can have its own name/icon) -->
+  <link rel="manifest" href="/manifest.resident.webmanifest?v=1">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" sizes="180x180" href="/icons/cases/icon-180.png?v=3">
+
+  <title>Resident Logbook — My Year</title>
+  <style>
+    :root { --bg:#0f172a; --card:#111827; --txt:#e5e7eb; --muted:#9ca3af; --accent:#22d3ee; }
+    body{margin:0;background:var(--bg);color:var(--txt);font:16px/1.5 system-ui,Segoe UI,Roboto,Helvetica,Arial}
+    .wrap{max-width:1000px;margin:0 auto;padding:24px}
+    .card{background:var(--card);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.25);padding:20px; overflow:hidden;}
+    h1{margin:0 0 12px;font-size:22px}
+    label{color:var(--muted);margin-right:10px}
+    input,select,button{padding:10px;border-radius:10px;border:1px solid #334155;background:#0b1220;color:var(--txt);min-height:44px}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .muted{color:var(--muted)}
+
+    /* table + scroll */
+    #tableWrap{ overflow-x:auto; margin-top:12px; border-radius:12px; }
+    table{ width:max-content; min-width:100%; border-collapse:collapse; }
+    th,td{ border:1px solid #334155; padding:10px 12px; }
+    thead th{ text-align:center; white-space:normal; line-height:1.25; }
+    tbody td{ text-align:right; }
+    th:first-child, td:first-child{ text-align:left; white-space:nowrap; }
+    th:nth-last-child(-n+2), td:nth-last-child(-n+2){ background:#1e293b; font-weight:700; }
+    tfoot td{ font-weight:700; text-align:right; }
+    tfoot td:first-child{ text-align:left; }
+
+    /* highlight current resident */
+    tr.me td{ background: rgba(34,211,238,.12); }
+
+    a.btnlink{ color:var(--accent); text-decoration:underline; cursor:pointer }
+    @media (max-width: 900px){
+      thead th{ font-size:14px }
+      th,td{ padding:8px 10px }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>My Year — Progress</h1>
+      <div class="row">
+        <label>Resident year
+          <select id="year">
+            <option value="">Auto (from profile)</option>
+            <option value="1">Year 1</option>
+            <option value="2">Year 2</option>
+            <option value="3">Year 3</option>
+          </select>
+        </label>
+        <span class="muted" id="who"></span>
+        <button id="refresh">Refresh</button>
+        <a href="#" id="downloadYear" class="btnlink">Download Year CSV</a>
+        <a href="#" id="downloadMe" class="btnlink">Download My CSV</a>
+      </div>
+      <div id="stats" class="muted" style="margin-top:8px"></div>
+      <div id="tableWrap"></div>
+    </div>
+  </div>
+
+  <script>
+    // === CONFIG ===
+    const CSV_URL = 'https://script.google.com/macros/s/AKfycbz1mgE0WGLqe6qHLOXuhHJdamkZ4Pa_bm-wBLYFDyuFeLXBGDq_fyq3aePU8ffjTmXD/exec?mode=csv';
+
+    // Short labels for headers, matching your admin page
+    const PROC_LABELS = {
+      'Endotracheal tube insertion': 'ETT',
+      'Laryngeal mask airway insertion': 'LMA',
+      'Arterial line insertion': 'A-line',
+      'Central venous pressure insertion': 'C-line',
+      'Brachial plexus block': 'BPB',
+      'Spinal block': 'Spinal',
+      'Epidural block': 'Epidural',
+      'Painless labour': 'Painless'
+    };
+    const PROC_ORDER = [
+      'Case attending',
+      'Endotracheal tube insertion',
+      'Laryngeal mask airway insertion',
+      'Arterial line insertion',
+      'Central venous pressure insertion',
+      'Brachial plexus block',
+      'Lower limb blocks',
+      'Spinal block',
+      'Epidural block',
+      'Painless labour'
+    ];
+
+    // Elements
+    const yearSel = document.getElementById('year');
+    const whoEl = document.getElementById('who');
+    const statsEl = document.getElementById('stats');
+    const tableWrap = document.getElementById('tableWrap');
+
+    document.getElementById('refresh').addEventListener('click', load);
+    document.getElementById('downloadYear').addEventListener('click', (e)=>{ e.preventDefault(); downloadText(toCsv(lastYearRows), `my-year_${ts()}.csv`); });
+    document.getElementById('downloadMe').addEventListener('click', (e)=>{ e.preventDefault(); downloadText(toCsv(lastMyRows), `my-rows_${ts()}.csv`); });
+
+    // Resident profile (from index.html)
+    const profile = JSON.parse(localStorage.getItem('resident_profile')||'{}');
+    const myName = [profile.name, profile.surname].filter(Boolean).join(' ').trim();
+    if (profile.year) yearSel.value = ''; // keep "Auto" but show who
+    whoEl.textContent = myName ? `You: ${myName} (Year ${profile.year||'?'})` : 'You: (set your name in the entry page)';
+
+    // Data holders
+    let allRows = [];        // parsed CSV [ [hdr], [row...] ]
+    let lastYearRows = [];   // header + rows for the chosen year
+    let lastMyRows = [];     // header + only my rows (FullName == myName)
+    let lastPivot = [];      // pivot (for possible future export)
+
+    load();
+
+    async function load(){
+      tableWrap.innerHTML = 'Loading…';
+      try{
+        const res = await fetch(CSV_URL, { cache: 'no-store' });
+        const text = await res.text();
+        allRows = parseCsv(text);
+        render();
+      }catch(err){
+        tableWrap.innerHTML = 'Error loading CSV: '+String(err);
+      }
+    }
+
+    function render(){
+      if (!allRows.length){ tableWrap.innerHTML = 'No data'; return; }
+
+      const [hdr, ...data] = allRows;
+      const idx = Object.fromEntries(hdr.map((h,i)=>[h,i]));
+
+      // Resolve the desired year (selector > profile.year)
+      const sel = yearSel.value.trim();
+      const myYear = sel || String(profile.year || '');
+
+      // Filter by year (if known)
+      const rowsYear = data.filter(r => !myYear || String(r[idx.ResidentYear]) === myYear);
+      lastYearRows = [hdr, ...rowsYear];
+
+      // My rows (by FullName)
+      lastMyRows = myName ? [hdr, ...rowsYear.filter(r => (r[idx.FullName]||'') === myName)] : [hdr];
+
+      // Build pivot by FullName × Procedure for the selected year
+      const matrix = new Map(); // name -> Map(proc -> sum)
+      const grandTotals = new Map();
+      let totalCount = 0;
+
+      rowsYear.forEach(r => {
+        const name = r[idx.FullName]||'';
+        const proc = r[idx.Procedure]||'';
+        const cnt = Number(r[idx.Count]||'0')||0;
+        totalCount += cnt;
+        if (!matrix.has(name)) matrix.set(name, new Map());
+        const row = matrix.get(name);
+        row.set(proc, (row.get(proc)||0) + cnt);
+        grandTotals.set(proc, (grandTotals.get(proc)||0) + cnt);
+      });
+
+      const names = [...matrix.keys()].sort((a,b)=>a.localeCompare(b));
+
+      // Render table
+      let html = '<table><thead><tr><th>Resident</th>';
+      PROC_ORDER.forEach(p => html += `<th>${escapeHtml(PROC_LABELS[p]||p)}</th>`);
+      html += '<th>Total procedures</th><th>Grand Total</th></tr></thead><tbody>';
+
+      const colTotals = PROC_ORDER.map(p => grandTotals.get(p)||0);
+      const pivotRows = [];
+
+      names.forEach(name=>{
+        const row = matrix.get(name);
+        let rowTotal = 0, rowProcTotal = 0;
+        const line = [name];
+        PROC_ORDER.forEach(p=>{
+          const v = row.get(p)||0;
+          rowTotal += v;
+          if (p !== 'Case attending') rowProcTotal += v;
+          line.push(v);
+        });
+        line.push(rowProcTotal, rowTotal);
+        pivotRows.push(line);
+
+        const isMe = myName && name === myName;
+        html += `<tr class="${isMe?'me':''}"><td>${escapeHtml(name)}</td>`;
+        PROC_ORDER.forEach(p => html += `<td>${row.get(p)||0}</td>`);
+        html += `<td>${rowProcTotal}</td><td>${rowTotal}</td></tr>`;
+      });
+
+      const grandTotal = colTotals.reduce((a,b)=>a+b,0);
+      const procTotal  = PROC_ORDER.reduce((sum,p,i)=> p==='Case attending'?sum:sum+colTotals[i], 0);
+
+      html += '</tbody><tfoot><tr><td><b>Totals</b></td>';
+      colTotals.forEach(v => html += `<td><b>${v}</b></td>`);
+      html += `<td><b>${procTotal}</b></td><td><b>${grandTotal}</b></td></tr></tfoot></table>`;
+
+      tableWrap.innerHTML = html;
+
+      const yearLabel = myYear ? `Year ${myYear}` : 'All years';
+      const residentsCount = names.length;
+      statsEl.textContent = `${yearLabel} | ${rowsYear.length} rows | ${residentsCount} residents | ${totalCount} total counted procedures`;
+
+      lastPivot = [
+        ['Resident', ...PROC_ORDER.map(p=>PROC_LABELS[p]||p), 'Total procedures', 'Grand Total'],
+        ...pivotRows,
+        ['Totals', ...colTotals, procTotal, grandTotal]
+      ];
+    }
+
+    // ===== Helpers =====
+    function parseCsv(text){
+      const rows = [];
+      let i=0, field='', row=[], inQuotes=false;
+      while(i<text.length){
+        const ch = text[i++];
+        if(inQuotes){
+          if(ch === '"'){
+            if(text[i] === '"'){ field += '"'; i++; } else { inQuotes = false; }
+          } else field += ch;
+        } else {
+          if(ch === '"') inQuotes = true;
+          else if(ch === ','){ row.push(field); field=''; }
+          else if(ch === '\n'){ row.push(field); rows.push(row); row=[]; field=''; }
+          else field += ch;
+        }
+      }
+      if(field.length || row.length){ row.push(field); rows.push(row); }
+      return rows;
+    }
+    function escapeHtml(s){ return String(s).replace(/[&<>\"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+    function csvEscape(v){ const s=String(v??''); return (s.includes(',')||s.includes('"')||s.includes('\n')) ? '"' + s.replace(/"/g,'""') + '"' : s; }
+    function toCsv(arr){ return arr.map(r=>r.map(csvEscape).join(',')).join('\n'); }
+    function downloadText(text, filename){
+      if (!text || (Array.isArray(text) && !text.length)) { alert('Nothing to download yet.'); return; }
+      const blob = new Blob([Array.isArray(text)?toCsv(text):text], {type:'text/csv;charset=utf-8'});
+      const url = URL.createObjectURL(blob); const a = document.createElement('a');
+      a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+      URL.revokeObjectURL(url); a.remove();
+    }
+    function ts(){ const d=new Date(),p=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}_${p(d.getHours())}-${p(d.getMinutes())}`; }
+
+    // PWA worker (optional)
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/service-worker.js').catch(()=>{});
+    }
+  </script>
+</body>
+</html>
