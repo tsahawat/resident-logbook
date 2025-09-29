@@ -4,12 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- PWA (separate manifest so it can have its own name/icon) -->
-  <link rel="manifest" href="/manifest.resident.webmanifest?v=1">
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.resident.webmanifest?v=2">
   <meta name="theme-color" content="#0f172a">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="apple-touch-icon" sizes="180x180" href="/icons/cases/icon-180.png?v=3">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/cases/icon-180.png?v=3">
 
   <title>Resident Logbook — My Year</title>
   <style>
@@ -22,6 +22,8 @@
     input,select,button{padding:10px;border-radius:10px;border:1px solid #334155;background:#0b1220;color:var(--txt);min-height:44px}
     .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
     .muted{color:var(--muted)}
+
+    #myProgress{margin:12px 0;padding:12px;background:#0b1220;border-radius:12px}
 
     /* table + scroll */
     #tableWrap{ overflow-x:auto; margin-top:12px; border-radius:12px; }
@@ -48,6 +50,8 @@
   <div class="wrap">
     <div class="card">
       <h1>My Year — Progress</h1>
+      <div id="myProgress"></div>
+
       <div class="row">
         <label>Resident year
           <select id="year">
@@ -70,8 +74,6 @@
   <script>
     // === CONFIG ===
     const CSV_URL = 'https://script.google.com/macros/s/AKfycbz1mgE0WGLqe6qHLOXuhHJdamkZ4Pa_bm-wBLYFDyuFeLXBGDq_fyq3aePU8ffjTmXD/exec?mode=csv';
-
-    // Short labels for headers, matching your admin page
     const PROC_LABELS = {
       'Endotracheal tube insertion': 'ETT',
       'Laryngeal mask airway insertion': 'LMA',
@@ -95,27 +97,22 @@
       'Painless labour'
     ];
 
-    // Elements
     const yearSel = document.getElementById('year');
     const whoEl = document.getElementById('who');
     const statsEl = document.getElementById('stats');
     const tableWrap = document.getElementById('tableWrap');
+    const myProgressEl = document.getElementById('myProgress');
 
     document.getElementById('refresh').addEventListener('click', load);
     document.getElementById('downloadYear').addEventListener('click', (e)=>{ e.preventDefault(); downloadText(toCsv(lastYearRows), `my-year_${ts()}.csv`); });
     document.getElementById('downloadMe').addEventListener('click', (e)=>{ e.preventDefault(); downloadText(toCsv(lastMyRows), `my-rows_${ts()}.csv`); });
 
-    // Resident profile (from index.html)
     const profile = JSON.parse(localStorage.getItem('resident_profile')||'{}');
     const myName = [profile.name, profile.surname].filter(Boolean).join(' ').trim();
-    if (profile.year) yearSel.value = ''; // keep "Auto" but show who
+    if (profile.year) yearSel.value = '';
     whoEl.textContent = myName ? `You: ${myName} (Year ${profile.year||'?'})` : 'You: (set your name in the entry page)';
 
-    // Data holders
-    let allRows = [];        // parsed CSV [ [hdr], [row...] ]
-    let lastYearRows = [];   // header + rows for the chosen year
-    let lastMyRows = [];     // header + only my rows (FullName == myName)
-    let lastPivot = [];      // pivot (for possible future export)
+    let allRows = [], lastYearRows = [], lastMyRows = [], lastPivot = [];
 
     load();
 
@@ -137,19 +134,43 @@
       const [hdr, ...data] = allRows;
       const idx = Object.fromEntries(hdr.map((h,i)=>[h,i]));
 
-      // Resolve the desired year (selector > profile.year)
       const sel = yearSel.value.trim();
       const myYear = sel || String(profile.year || '');
-
-      // Filter by year (if known)
       const rowsYear = data.filter(r => !myYear || String(r[idx.ResidentYear]) === myYear);
       lastYearRows = [hdr, ...rowsYear];
-
-      // My rows (by FullName)
       lastMyRows = myName ? [hdr, ...rowsYear.filter(r => (r[idx.FullName]||'') === myName)] : [hdr];
 
-      // Build pivot by FullName × Procedure for the selected year
-      const matrix = new Map(); // name -> Map(proc -> sum)
+      // === My per-procedure totals summary ===
+      const myTotals = new Map();
+      if (lastMyRows.length > 1) {
+        lastMyRows.slice(1).forEach(r => {
+          const proc = r[idx.Procedure]||'';
+          const cnt = Number(r[idx.Count]||'0')||0;
+          myTotals.set(proc, (myTotals.get(proc)||0) + cnt);
+        });
+      }
+      let progHtml = `<strong>${escapeHtml(myName||'')}</strong>`;
+      if (profile.year) progHtml += ` (Year ${profile.year})`;
+      progHtml += '<br><br>';
+      if (myTotals.size) {
+        progHtml += '<div style="display:flex;flex-wrap:wrap;gap:12px">';
+        PROC_ORDER.forEach(p => {
+          if (p === 'Case attending') return; // optional: skip case attending in mini-cards
+          const label = PROC_LABELS[p]||p;
+          const v = myTotals.get(p)||0;
+          progHtml += `<div style="flex:1 0 45%;padding:6px 10px;background:#111827;border-radius:8px">
+            <span style="color:#9ca3af">${escapeHtml(label)}</span>
+            <div style="font-size:18px;font-weight:700">${v}</div>
+          </div>`;
+        });
+        progHtml += '</div>';
+      } else {
+        progHtml += '<em>No procedures logged yet.</em>';
+      }
+      myProgressEl.innerHTML = progHtml;
+
+      // === Pivot table for year (same as before) ===
+      const matrix = new Map();
       const grandTotals = new Map();
       let totalCount = 0;
 
@@ -166,7 +187,6 @@
 
       const names = [...matrix.keys()].sort((a,b)=>a.localeCompare(b));
 
-      // Render table
       let html = '<table><thead><tr><th>Resident</th>';
       PROC_ORDER.forEach(p => html += `<th>${escapeHtml(PROC_LABELS[p]||p)}</th>`);
       html += '<th>Total procedures</th><th>Grand Total</th></tr></thead><tbody>';
@@ -176,79 +196,44 @@
 
       names.forEach(name=>{
         const row = matrix.get(name);
-        let rowTotal = 0, rowProcTotal = 0;
-        const line = [name];
+        let rowTotal=0, rowProcTotal=0;
+        const line=[name];
         PROC_ORDER.forEach(p=>{
-          const v = row.get(p)||0;
-          rowTotal += v;
-          if (p !== 'Case attending') rowProcTotal += v;
+          const v=row.get(p)||0;
+          rowTotal+=v;
+          if(p!=='Case attending') rowProcTotal+=v;
           line.push(v);
         });
-        line.push(rowProcTotal, rowTotal);
+        line.push(rowProcTotal,rowTotal);
         pivotRows.push(line);
-
-        const isMe = myName && name === myName;
-        html += `<tr class="${isMe?'me':''}"><td>${escapeHtml(name)}</td>`;
-        PROC_ORDER.forEach(p => html += `<td>${row.get(p)||0}</td>`);
-        html += `<td>${rowProcTotal}</td><td>${rowTotal}</td></tr>`;
+        const isMe = myName && name===myName;
+        html+=`<tr class="${isMe?'me':''}"><td>${escapeHtml(name)}</td>`;
+        PROC_ORDER.forEach(p=> html+=`<td>${row.get(p)||0}</td>`);
+        html+=`<td>${rowProcTotal}</td><td>${rowTotal}</td></tr>`;
       });
 
-      const grandTotal = colTotals.reduce((a,b)=>a+b,0);
-      const procTotal  = PROC_ORDER.reduce((sum,p,i)=> p==='Case attending'?sum:sum+colTotals[i], 0);
+      const grandTotal=colTotals.reduce((a,b)=>a+b,0);
+      const procTotal=PROC_ORDER.reduce((sum,p,i)=>p==='Case attending'?sum:sum+colTotals[i],0);
+      html+='</tbody><tfoot><tr><td><b>Totals</b></td>';
+      colTotals.forEach(v=> html+=`<td><b>${v}</b></td>`);
+      html+=`<td><b>${procTotal}</b></td><td><b>${grandTotal}</b></td></tr></tfoot></table>`;
+      tableWrap.innerHTML=html;
 
-      html += '</tbody><tfoot><tr><td><b>Totals</b></td>';
-      colTotals.forEach(v => html += `<td><b>${v}</b></td>`);
-      html += `<td><b>${procTotal}</b></td><td><b>${grandTotal}</b></td></tr></tfoot></table>`;
+      const yearLabel=myYear?`Year ${myYear}`:'All years';
+      statsEl.textContent=`${yearLabel} | ${rowsYear.length} rows | ${names.length} residents | ${totalCount} total counted procedures`;
 
-      tableWrap.innerHTML = html;
-
-      const yearLabel = myYear ? `Year ${myYear}` : 'All years';
-      const residentsCount = names.length;
-      statsEl.textContent = `${yearLabel} | ${rowsYear.length} rows | ${residentsCount} residents | ${totalCount} total counted procedures`;
-
-      lastPivot = [
-        ['Resident', ...PROC_ORDER.map(p=>PROC_LABELS[p]||p), 'Total procedures', 'Grand Total'],
-        ...pivotRows,
-        ['Totals', ...colTotals, procTotal, grandTotal]
-      ];
+      lastPivot=[ ['Resident',...PROC_ORDER.map(p=>PROC_LABELS[p]||p),'Total procedures','Grand Total'], ...pivotRows, ['Totals',...colTotals,procTotal,grandTotal] ];
     }
 
     // ===== Helpers =====
-    function parseCsv(text){
-      const rows = [];
-      let i=0, field='', row=[], inQuotes=false;
-      while(i<text.length){
-        const ch = text[i++];
-        if(inQuotes){
-          if(ch === '"'){
-            if(text[i] === '"'){ field += '"'; i++; } else { inQuotes = false; }
-          } else field += ch;
-        } else {
-          if(ch === '"') inQuotes = true;
-          else if(ch === ','){ row.push(field); field=''; }
-          else if(ch === '\n'){ row.push(field); rows.push(row); row=[]; field=''; }
-          else field += ch;
-        }
-      }
-      if(field.length || row.length){ row.push(field); rows.push(row); }
-      return rows;
-    }
-    function escapeHtml(s){ return String(s).replace(/[&<>\"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-    function csvEscape(v){ const s=String(v??''); return (s.includes(',')||s.includes('"')||s.includes('\n')) ? '"' + s.replace(/"/g,'""') + '"' : s; }
-    function toCsv(arr){ return arr.map(r=>r.map(csvEscape).join(',')).join('\n'); }
-    function downloadText(text, filename){
-      if (!text || (Array.isArray(text) && !text.length)) { alert('Nothing to download yet.'); return; }
-      const blob = new Blob([Array.isArray(text)?toCsv(text):text], {type:'text/csv;charset=utf-8'});
-      const url = URL.createObjectURL(blob); const a = document.createElement('a');
-      a.href = url; a.download = filename; document.body.appendChild(a); a.click();
-      URL.revokeObjectURL(url); a.remove();
-    }
-    function ts(){ const d=new Date(),p=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}_${p(d.getHours())}-${p(d.getMinutes())}`; }
+    function parseCsv(text){const rows=[];let i=0,field='',row=[],inQuotes=false;while(i<text.length){const ch=text[i++];if(inQuotes){if(ch==='"'){if(text[i]==='"'){field+='"';i++;}else{inQuotes=false;}}else field+=ch;}else{if(ch==='"')inQuotes=true;else if(ch===','){row.push(field);field='';}else if(ch==='\n'){row.push(field);rows.push(row);row=[];field='';}else field+=ch;}}if(field.length||row.length){row.push(field);rows.push(row);}return rows;}
+    function escapeHtml(s){return String(s).replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+    function csvEscape(v){const s=String(v??'');return(s.includes(',')||s.includes('"')||s.includes('\n'))?'"'+s.replace(/"/g,'""')+'"':s;}
+    function toCsv(arr){return arr.map(r=>r.map(csvEscape).join(',')).join('\n');}
+    function downloadText(text,filename){if(!text||(Array.isArray(text)&&!text.length)){alert('Nothing to download yet.');return;}const blob=new Blob([Array.isArray(text)?toCsv(text):text],{type:'text/csv;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();URL.revokeObjectURL(url);a.remove();}
+    function ts(){const d=new Date(),p=n=>String(n).padStart(2,'0');return`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}_${p(d.getHours())}-${p(d.getMinutes())}`;}
 
-    // PWA worker (optional)
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/service-worker.js').catch(()=>{});
-    }
+    if('serviceWorker' in navigator){navigator.serviceWorker.register('service-worker.js').catch(()=>{});}
   </script>
 </body>
 </html>
